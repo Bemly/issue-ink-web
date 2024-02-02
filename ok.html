@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <script src="https://raw.githubusercontent.com/Bemly/Web-IssueInk/main/push.js"></script>
     <script type="module">
         // 获取参数部分
         var searchParams = window.location.search;
@@ -13,10 +14,10 @@
         // 获取特定参数的值
         var parameterValue = params.get('code');
         console.log(parameterValue);
-
-        fetch("https://github.com/login/oauth/access_token?client_id=eaa7fedee07299f28436&client_secret=ea3e19035292dd20527f26819a9448f1f05c40b7&code=" + parameterValue)
-            .then(data => console.log(data))
-            .catch(err => console.error(err));
+        //
+        // fetch("https://github.com/login/oauth/access_token?client_id=eaa7fedee07299f28436&client_secret=ea3e19035292dd20527f26819a9448f1f05c40b7&code=" + parameterValue)
+        //     .then(data => console.log(data))
+        //     .catch(err => console.error(err));
     </script>
 </head>
 <body>
