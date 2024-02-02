@@ -4,13 +4,6 @@
     <meta charset="UTF-8">
     <title>白嫖使我快惹系列</title>
     <script type="module">
-        import { Octokit, App } from "https://esm.sh/octokit";
-        // import { createTokenAuth } from "https://esm.sh/@octokit/auth-token";
-        // console.log("Hello, %s", createTokenAuth);
-        let data = await fetch("https://github.com/login/oauth/authorize?client_id=eaa7fedee07299f28436")
-            .then(response => response.json())
-            .catch(error => console.error("Error:", error));
-        console.info(data)
         // fetch("https://api.example.com/postData", {
         //     method: "POST",
         //     headers: {
@@ -24,6 +17,15 @@
         //     .then(response => response.json())
         //     .then(data => console.log(data))
         //     .catch(error => console.error("Error:", error));
+        window.location.href='https://github.com/login/oauth/authorize?client_id=eaa7fedee07299f28436&state=bemly';
+        import { Octokit, App } from "https://esm.sh/octokit";
+        // import { createTokenAuth } from "https://esm.sh/@octokit/auth-token";
+        // console.log("Hello, %s", createTokenAuth);
+        // let data = await fetch("https://github.com/login/oauth/authorize?client_id=eaa7fedee07299f28436")
+        //     .then(response => response.json())
+        //     .catch(error => console.error("Error:", error));
+        // console.info(data)
+
 
         // // Create a personal access token at https://github.com/settings/tokens/new?scopes=repo
         // const octokit = new Octokit({ auth: `personal-access-token123` });
