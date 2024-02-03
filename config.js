@@ -27,6 +27,9 @@
 
 export const VerCtrl = {headers: { 'X-GitHub-Api-Version': '2022-11-28' }};
 export const ACCESS_TOKEN = '';
-export const OWNER = 'isaaxite';
-export const REPO = 'blog';
+// 这是我的榜样 练习场（
+// export const OWNER = 'isaaxite';
+// export const REPO = 'blog';
+export const OWNER = 'Bemly';
+export const REPO = 'Web-IssueInk';
 export const SERVNAME = '[issueink-core]';
