@@ -126,3 +126,19 @@ async function fetchData() {
 
 // 调用异步函数
 fetchData();
+
+
+
+//https://esm.sh/jquery
+// 已过期 mode CORS不再可用
+function getPage(name, repo, file) {
+    fetch(`https://github.com/${name}/${repo}/${file}`, {mode: 'cors'})
+        .then(data => data.text())
+        .then(data => {
+            const parser = new DOMParser();
+            const dataEl = parser.parseFromString(data, "text/html");
+            const el = dataEl.querySelector(".wiki-body > .markdown-body")
+            $.html(".content", el.innerHTML);
+        })
+}
+getPage("arguiot", "Glottologist", "wiki");
