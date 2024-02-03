@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.mozilla.org/MPL/2.0/
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,7 +25,7 @@
  * @type {Object} VerCtrl - 使用API的版本，用作github api的头部 ruanya!
  */
 
-export const VerCtrl = { headers: { 'X-GitHub-Api-Version': '2022-11-28' } };
+export const VerCtrl = {headers: { 'X-GitHub-Api-Version': '2022-11-28' }};
 export const ACCESS_TOKEN = '';
 export const OWNER = 'isaaxite';
 export const REPO = 'blog';

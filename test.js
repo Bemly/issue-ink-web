@@ -86,3 +86,43 @@ let abc = fetch('https://api.github.com/repos/isaaxite/blog/issues/309').then(da
 });
 // Octokit.js
 // https://github.com/octokit/core.js#readme
+
+
+/**
+ * 测试json为什么多出来了200 其中屯案
+ */
+
+// 异步加载 JSON 文件并转换为对象
+async function readJsonFile(url) {
+    try {
+        const response = await fetch(url);
+        const jsonData = await response.json();
+        return jsonData;
+    } catch (error) {
+        console.error('Error reading JSON file:', error.message);
+        return null;
+    }
+}
+
+// 使用异步函数读取 JSON 文件
+async function fetchData() {
+    const dataObject = await readJsonFile('./issueink-core/simple/getComments.json');
+
+    if (dataObject) {
+        console.log('Data:', dataObject);
+        let testInt = 319;
+        for (const key in dataObject) {
+            if(dataObject[key].number === testInt--) {
+                if (testInt === 282) testInt--;
+                console.log(dataObject[key].number)
+            } else {
+                console.error(dataObject[key].number)
+            }
+        }
+    } else {
+        console.log('Failed to read JSON file.');
+    }
+}
+
+// 调用异步函数
+fetchData();
