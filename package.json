@@ -7,10 +7,10 @@
     "res:build": "rescript build",
     "res:watch": "rescript build -w",
     "res:clean": "rescript clean",
-    "bundle": "esbuild src/App.mjs --bundle --format=esm --outfile=dist/bundle.js --external:marked",
-    "build": "rescript build && esbuild src/App.mjs --bundle --format=esm --outfile=dist/bundle.js --external:marked",
+    "bundle": "esbuild src/App.mjs --bundle --format=esm --outfile=docs/bundle.js --external:marked",
+    "build": "rescript build && esbuild src/App.mjs --bundle --format=esm --outfile=docs/bundle.js --external:marked",
     "dev": "rescript build -w",
-    "clean": "rescript clean && rm -rf dist"
+    "clean": "rescript clean && rm -f docs/bundle.js"
   },
   "devDependencies": {
     "@rescript/core": "^1.6.0",
