@@ -4,54 +4,58 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IssueInk is a zero-build, pure client-side blog system that uses GitHub Issues as a CMS. Blog posts are GitHub Issues fetched at runtime via the GitHub REST API and rendered as Markdown in the browser. Deployed on GitHub Pages at `blog.bemly.moe`.
+IssueInk is a client-side blog system that uses GitHub Issues as CMS. Written in ReScript, compiled to ES modules, bundled with esbuild, and deployed on GitHub Pages at `blog.bemly.moe`.
+
+## Build Commands
+
+```bash
+npm install              # Install dependencies
+npm run build            # Full build: rescript compile + esbuild bundle
+npm run res:build        # ReScript compile only (.res -> .mjs)
+npm run bundle           # esbuild bundle only (src/*.mjs -> dist/bundle.js)
+npm run dev              # ReScript watch mode
+npm run clean            # Clean build artifacts
+```
+
+The full build pipeline: `rescript build` compiles `src/*.res` to `src/*.mjs`, then `esbuild` bundles `src/App.mjs` (+ @rescript/runtime) into `dist/bundle.js`. The `marked` library is external (loaded via importmap from esm.sh CDN).
 
 ## Architecture
 
-This is a **static, no-build** project — no package.json, no bundler, no Node.js required.
+- **Language**: ReScript 12.x with @rescript/core
+- **Bundler**: esbuild (bundles @rescript/runtime into dist/bundle.js)
+- **Dependencies**: `marked` loaded at runtime via `<script type="importmap">` pointing to esm.sh CDN
+- **Routing**: URL hash-based (`#/`, `#/post/123`, `#/labels/name`)
+- **API**: Raw `fetch` against GitHub REST API v3 (no Octokit — simpler binding)
 
-- **Entry**: `index.html` loads `issueink-core/issue2vanilla.js` as an ES module
-- **Config**: `config.js` — exports `ACCESS_TOKEN`, `OWNER`, `REPO`, `VerCtrl` (API version header), `SERVNAME`
-- **API layer**: `issueink-core/issueApi.js` — wraps GitHub Issues REST API via Octokit (loaded from esm.sh CDN)
-- **Renderer**: `issueink-core/issue2vanilla.js` — fetches issues, parses Markdown via `marked` (loaded from esm.sh CDN), renders to DOM
-- **Wiki stub**: `issueink-core/wikiApi.js` — incomplete/abandoned, references unavailable jQuery-like library
+### Source files (`src/`)
 
-**Data flow**: `config.js` → `issueApi.js` (Octokit fetches from GitHub) → `issue2vanilla.js` (marked parses Markdown → DOM)
+| File | Role |
+|------|------|
+| `Config.res` | Blog config (owner, repo, token, perPage) |
+| `GithubApi.res` | GitHub REST API: types + fetch-based calls (getIssues, getIssue, getComments, getLabels) |
+| `Marked.res` | Binding to `marked.parse` |
+| `DomHelpers.res` | DOM externals (createElement, appendChild, setInnerHTML, etc.) |
+| `Router.res` | Hash-based route parsing and navigation |
+| `App.res` | Entry point — wires router to page renderers, creates layout |
+| `PostList.res` | Post list page with cards, search filter, pagination |
+| `PostDetail.res` | Single post view with markdown rendering + comments |
+| `Sidebar.res` | Sidebar: about, search input, labels, links |
+| `Pagination.res` | Prev/next pagination controls |
 
-## Dependencies
+### Key patterns
 
-All loaded at runtime from `esm.sh` CDN (no install step):
-- `octokit` — GitHub REST API client
-- `marked` — Markdown parser
+- Use `string ++ string` for concatenation, not template literals (ReScript `` ` `` syntax differs from JS)
+- `%raw(...)` for JS interop where no binding exists — note that ReScript variable names may be renamed in output
+- `async/await` for promise handling (ReScript 12 built-in)
+- `@get`/`@set`/`@send`/`@val` externals for DOM and Web API bindings
+- Filter out GitHub pull requests: `issue.pull_request` field present = PR, skip it
 
-## How to Run
+## Configuration
 
-Open `index.html` in a browser (or serve statically). No build step needed.
+`src/Config.res`:
+- `accessToken` — GitHub PAT. Empty = unauthenticated (60 req/hr). Set token for 5000 req/hr.
+- `owner` / `repo` — target GitHub repository
 
-For local development with ES modules, use any static file server:
-```bash
-python3 -m http.server 8000
-# or
-npx serve .
-```
+## Old Code
 
-## Key Configuration
-
-In `config.js`:
-- `ACCESS_TOKEN` — GitHub PAT. Empty string = unauthenticated (60 req/hour). Set a token for 5000 req/hour.
-- `OWNER` / `REPO` — target GitHub repository whose Issues become blog posts.
-- NEVER commit real tokens to this file.
-
-## API Rate Limits
-
-- Unauthenticated: 60 requests/hour (current default, `ACCESS_TOKEN = ''`)
-- Authenticated: 5000 requests/hour
-- Each issue list + detail = 2 API calls. With `per_page=5`, page load uses ~10 calls.
-
-## Conventions
-
-- Code comments are in Chinese (casual style)
-- Source files carry MPL-2.0 license headers
-- JS uses ES module syntax (`import`/`export`)
-- `issueApi.js` has thorough JSDoc documenting GitHub API parameters
-- Sample API responses in `issueink-core/simple/` are for reference only, not loaded at runtime
+`config.js`, `issueink-core/` are the original vanilla JS implementation, kept for reference. Not loaded by the app.

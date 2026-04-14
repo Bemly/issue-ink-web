@@ -1,10 +1,21 @@
 <!DOCTYPE html>
 <html lang="zh-hans">
 <head>
-    <meta charset="UTF-8">
-    <title>一只蓝莓小果冻Nya~</title>
-    <script type="module" src="./issueink-core/issue2vanilla.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IssueInk</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="icon" href="./favicon.ico">
+  <script type="importmap">
+  {
+    "imports": {
+      "marked": "https://esm.sh/marked"
+    }
+  }
+  </script>
 </head>
 <body>
+  <div id="app"></div>
+  <script type="module" src="./dist/bundle.js"></script>
 </body>
 </html>

@@ -1,0 +1,23 @@
+{
+  "name": "issueink",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "res:build": "rescript build",
+    "res:watch": "rescript build -w",
+    "res:clean": "rescript clean",
+    "bundle": "esbuild src/App.mjs --bundle --format=esm --outfile=dist/bundle.js --external:marked",
+    "build": "rescript build && esbuild src/App.mjs --bundle --format=esm --outfile=dist/bundle.js --external:marked",
+    "dev": "rescript build -w",
+    "clean": "rescript clean && rm -rf dist"
+  },
+  "devDependencies": {
+    "@rescript/core": "^1.6.0",
+    "esbuild": "^0.25.0",
+    "rescript": "^12.0.0"
+  },
+  "dependencies": {
+    "marked": "^15.0.0"
+  }
+}
