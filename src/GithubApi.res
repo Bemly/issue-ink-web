@@ -33,6 +33,38 @@ type comment = {
   html_url: string,
 }
 
+type discussionCategory = {
+  name: string,
+  slug: string,
+  emoji: option<string>,
+  description: option<string>,
+}
+
+type discussion = {
+  number: int,
+  title: string,
+  body: option<string>,
+  html_url: string,
+  user: user,
+  comments: int,
+  created_at: string,
+  updated_at: string,
+  category: discussionCategory,
+}
+
+type discussionComment = {
+  id: int,
+  user: user,
+  body: string,
+  created_at: string,
+  updated_at: string,
+  html_url: string,
+}
+
+type post =
+  | IssuePost(issue)
+  | DiscussionPost(discussion)
+
 type response = {ok: bool, status: int}
 
 @val external fetch: (string, {..}) => promise<response> = "fetch"
@@ -212,6 +244,147 @@ let getLabels = async (): array<label> => {
     ->Array.filterMap(l => l->JSON.Decode.object->Option.map(_, decodeLabel))
   | None => []
   }
+}
+
+// Discussion decoders
+
+let decodeDiscussionCategory = (obj: dict<JSON.t>): discussionCategory => {
+  let getStr = key => obj->Dict.get(key)->Option.flatMap(_, JSON.Decode.string)
+  let getStrOr = key => getStr(key)->Option.getOr("")
+  {
+    name: getStrOr("name"),
+    slug: getStrOr("slug"),
+    emoji: getStr("emoji"),
+    description: getStr("description"),
+  }
+}
+
+let decodeDiscussion = (json: JSON.t): option<discussion> => {
+  switch JSON.Decode.object(json) {
+  | None => None
+  | Some(obj) => {
+      let getStr = key => obj->Dict.get(key)->Option.flatMap(_, JSON.Decode.string)
+      let getStrExn = key => getStr(key)->Option.getOrThrow
+      let getInt = key =>
+        obj
+        ->Dict.get(key)
+        ->Option.flatMap(_, JSON.Decode.float)
+        ->Option.map(_, Belt.Float.toInt)
+
+      let user =
+        obj
+        ->Dict.get("user")
+        ->Option.flatMap(_, JSON.Decode.object)
+        ->Option.getOrThrow
+        ->decodeUser
+      let category =
+        obj
+        ->Dict.get("category")
+        ->Option.flatMap(_, JSON.Decode.object)
+        ->Option.getOrThrow
+        ->decodeDiscussionCategory
+
+      Some({
+        number: getInt("number")->Option.getOrThrow,
+        title: getStrExn("title"),
+        body: getStr("body"),
+        html_url: getStrExn("html_url"),
+        user,
+        comments: getInt("comments")->Option.getOr(0),
+        created_at: getStrExn("created_at"),
+        updated_at: getStrExn("updated_at"),
+        category,
+      })
+    }
+  }
+}
+
+let decodeDiscussionComment = (json: JSON.t): option<discussionComment> => {
+  switch JSON.Decode.object(json) {
+  | None => None
+  | Some(obj) => {
+      let getStr = key => obj->Dict.get(key)->Option.flatMap(_, JSON.Decode.string)
+      let getStrExn = key => getStr(key)->Option.getOrThrow
+      let getInt = key =>
+        obj
+        ->Dict.get(key)
+        ->Option.flatMap(_, JSON.Decode.float)
+        ->Option.map(_, Belt.Float.toInt)
+
+      let user =
+        obj->Dict.get("user")->Option.flatMap(_, JSON.Decode.object)->Option.getOrThrow->decodeUser
+
+      Some({
+        id: getInt("id")->Option.getOrThrow,
+        user,
+        body: getStrExn("body"),
+        created_at: getStrExn("created_at"),
+        updated_at: getStrExn("updated_at"),
+        html_url: getStrExn("html_url"),
+      })
+    }
+  }
+}
+
+// Discussion API functions
+
+let getDiscussions = async (~page: int, ~perPage: int): array<discussion> => {
+  let url = `${baseUrl}/repos/${Config.owner}/${Config.repo}/discussions?per_page=${Belt.Int.toString(
+      perPage,
+    )}&page=${Belt.Int.toString(page)}`
+  switch await fetchJson(url) {
+  | Some(json) =>
+    json
+    ->JSON.Decode.array
+    ->Option.getOr([])
+    ->Array.filterMap(decodeDiscussion)
+  | None => []
+  }
+}
+
+let getDiscussion = async (number: int): option<discussion> => {
+  let url = `${baseUrl}/repos/${Config.owner}/${Config.repo}/discussions/${Belt.Int.toString(
+      number,
+    )}`
+  switch await fetchJson(url) {
+  | Some(json) => decodeDiscussion(json)
+  | None => None
+  }
+}
+
+let getDiscussionComments = async (discussionNumber: int): array<discussionComment> => {
+  let url = `${baseUrl}/repos/${Config.owner}/${Config.repo}/discussions/${Belt.Int.toString(
+      discussionNumber,
+    )}/comments`
+  switch await fetchJson(url) {
+  | Some(json) =>
+    json
+    ->JSON.Decode.array
+    ->Option.getOr([])
+    ->Array.filterMap(decodeDiscussionComment)
+  | None => []
+  }
+}
+
+// Unified post fetching: merge issues + discussions, sort by date desc
+
+let getPosts = async (~page: int, ~perPage: int, ~labels: option<string>=?): array<post> => {
+  let issuesPromise = getIssues(~page, ~perPage, ~labels?)
+  let discussionsPromise = getDiscussions(~page, ~perPage)
+  let issues = await issuesPromise
+  let discussions = await discussionsPromise
+
+  let issuePosts = issues->Array.map(i => IssuePost(i))
+  let discussionPosts = discussions->Array.map(d => DiscussionPost(d))
+
+  let all = Array.concat(issuePosts, discussionPosts)
+
+  // Sort by created_at descending
+  let _ = %raw(`all.sort((a, b) => {
+    const getDate = p => p.TAG === "IssuePost" ? p._0.created_at : p._0.created_at;
+    return new Date(getDate(b)) - new Date(getDate(a));
+  })`)
+  all
 }
 
 @val external encodeURIComponent: string => string = "encodeURIComponent"

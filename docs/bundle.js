@@ -77,7 +77,7 @@ function parseHash(hash) {
   let cleanHash = hash.replace("#", "");
   let parts = cleanHash.split("/").filter((p) => p !== "");
   let len = parts.length;
-  if (len >= 3) {
+  if (len >= 4) {
     return "NotFound";
   }
   switch (len) {
@@ -117,19 +117,25 @@ function parseHash(hash) {
               _0: 1
             };
           }
-        case "post":
-          let numberStr = parts[1];
-          let n = fromString(numberStr, void 0);
-          if (n !== void 0) {
-            return {
-              TAG: "PostDetail",
-              _0: n
-            };
-          } else {
-            return "NotFound";
-          }
         default:
           return "NotFound";
+      }
+    case 3:
+      let match$2 = parts[0];
+      if (match$2 !== "post") {
+        return "NotFound";
+      }
+      let postType = parts[1];
+      let numberStr = parts[2];
+      let n = fromString(numberStr, void 0);
+      if (n !== void 0) {
+        return {
+          TAG: "PostDetail",
+          _0: postType,
+          _1: n
+        };
+      } else {
+        return "NotFound";
       }
   }
 }
@@ -151,19 +157,19 @@ function routeToString(route) {
     case "PostList":
       let p = route._0;
       if (p !== 1) {
-        return `#/page/` + String(p);
+        return "#/page/" + String(p);
       } else {
         return "#/";
       }
     case "PostDetail":
-      return `#/post/` + String(route._0);
+      return "#/post/" + route._0 + "/" + String(route._1);
     case "LabelFilter":
       let p$1 = route._1;
       let name = route._0;
       if (p$1 !== 1) {
-        return `#/labels/` + name + `/page/` + String(p$1);
+        return "#/labels/" + name + "/page/" + String(p$1);
       } else {
-        return `#/labels/` + name;
+        return "#/labels/" + name;
       }
   }
 }
@@ -396,6 +402,118 @@ async function getLabels() {
     return [];
   }
 }
+function decodeDiscussionCategory(obj) {
+  let getStr = (key) => {
+    let __x = obj[key];
+    return flatMap(__x, Decode.string);
+  };
+  return {
+    name: getOr(getStr("name"), ""),
+    slug: getOr(getStr("slug"), ""),
+    emoji: getStr("emoji"),
+    description: getStr("description")
+  };
+}
+function decodeDiscussion(json) {
+  let obj = Decode.object(json);
+  if (obj === void 0) {
+    return;
+  }
+  let getStr = (key) => {
+    let __x2 = obj[key];
+    return flatMap(__x2, Decode.string);
+  };
+  let getInt = (key) => {
+    let __x2 = obj[key];
+    let __x$12 = flatMap(__x2, Decode.float);
+    return map(__x$12, (prim) => prim | 0);
+  };
+  let __x = obj["user"];
+  let user = decodeUser(getOrThrow(flatMap(__x, Decode.object), void 0));
+  let __x$1 = obj["category"];
+  let category = decodeDiscussionCategory(getOrThrow(flatMap(__x$1, Decode.object), void 0));
+  return {
+    number: getOrThrow(getInt("number"), void 0),
+    title: getOrThrow(getStr("title"), void 0),
+    body: getStr("body"),
+    html_url: getOrThrow(getStr("html_url"), void 0),
+    user,
+    comments: getOr(getInt("comments"), 0),
+    created_at: getOrThrow(getStr("created_at"), void 0),
+    updated_at: getOrThrow(getStr("updated_at"), void 0),
+    category
+  };
+}
+function decodeDiscussionComment(json) {
+  let obj = Decode.object(json);
+  if (obj === void 0) {
+    return;
+  }
+  let getStr = (key) => {
+    let __x2 = obj[key];
+    return flatMap(__x2, Decode.string);
+  };
+  let getInt = (key) => {
+    let __x2 = obj[key];
+    let __x$1 = flatMap(__x2, Decode.float);
+    return map(__x$1, (prim) => prim | 0);
+  };
+  let __x = obj["user"];
+  let user = decodeUser(getOrThrow(flatMap(__x, Decode.object), void 0));
+  return {
+    id: getOrThrow(getInt("id"), void 0),
+    user,
+    body: getOrThrow(getStr("body"), void 0),
+    created_at: getOrThrow(getStr("created_at"), void 0),
+    updated_at: getOrThrow(getStr("updated_at"), void 0),
+    html_url: getOrThrow(getStr("html_url"), void 0)
+  };
+}
+async function getDiscussions(page, perPage2) {
+  let url = baseUrl + `/repos/` + owner + `/` + repo + `/discussions?per_page=` + String(perPage2) + `&page=` + String(page);
+  let json = await fetchJson(url);
+  if (json !== void 0) {
+    return filterMap(getOr(Decode.array(json), []), decodeDiscussion);
+  } else {
+    return [];
+  }
+}
+async function getDiscussion(number) {
+  let url = baseUrl + `/repos/` + owner + `/` + repo + `/discussions/` + String(number);
+  let json = await fetchJson(url);
+  if (json !== void 0) {
+    return decodeDiscussion(json);
+  }
+}
+async function getDiscussionComments(discussionNumber) {
+  let url = baseUrl + `/repos/` + owner + `/` + repo + `/discussions/` + String(discussionNumber) + `/comments`;
+  let json = await fetchJson(url);
+  if (json !== void 0) {
+    return filterMap(getOr(Decode.array(json), []), decodeDiscussionComment);
+  } else {
+    return [];
+  }
+}
+async function getPosts(page, perPage2, labels) {
+  let issuesPromise = getIssues(page, perPage2, labels);
+  let discussionsPromise = getDiscussions(page, perPage2);
+  let issues = await issuesPromise;
+  let discussions = await discussionsPromise;
+  let issuePosts = issues.map((i) => ({
+    TAG: "IssuePost",
+    _0: i
+  }));
+  let discussionPosts = discussions.map((d) => ({
+    TAG: "DiscussionPost",
+    _0: d
+  }));
+  let all = issuePosts.concat(discussionPosts);
+  all.sort((a, b) => {
+    const getDate = (p) => p.TAG === "IssuePost" ? p._0.created_at : p._0.created_at;
+    return new Date(getDate(b)) - new Date(getDate(a));
+  });
+  return all;
+}
 
 // src/Sidebar.mjs
 function getLabelTextColor(_color) {
@@ -525,46 +643,101 @@ function makeExcerpt(body) {
     return body;
   }
 }
-function renderIssueCard(issue) {
+function postCreatedAt(post) {
+  if (post.TAG === "IssuePost") {
+    return post._0.created_at;
+  } else {
+    return post._0.created_at;
+  }
+}
+function postUser(post) {
+  if (post.TAG === "IssuePost") {
+    return post._0.user;
+  } else {
+    return post._0.user;
+  }
+}
+function postComments(post) {
+  if (post.TAG === "IssuePost") {
+    return post._0.comments;
+  } else {
+    return post._0.comments;
+  }
+}
+function postRoute(post) {
+  if (post.TAG === "IssuePost") {
+    return {
+      TAG: "PostDetail",
+      _0: "issue",
+      _1: post._0.number
+    };
+  } else {
+    return {
+      TAG: "PostDetail",
+      _0: "discussion",
+      _1: post._0.number
+    };
+  }
+}
+function postTypeBadge(post) {
+  if (post.TAG === "IssuePost") {
+    return;
+  } else {
+    return post._0.category.name;
+  }
+}
+function renderPostCard(post) {
   let card = document.createElement("article");
   card.className = "post-card";
   let titleLink = document.createElement("a");
-  titleLink.textContent = issue.title;
-  titleLink.setAttribute("href", routeToString({
-    TAG: "PostDetail",
-    _0: issue.number
-  }));
+  titleLink.textContent = post._0.title;
+  titleLink.setAttribute("href", routeToString(postRoute(post)));
   titleLink.className = "post-card-title";
   card.appendChild(titleLink);
   let meta = document.createElement("div");
   meta.className = "post-card-meta";
   let dateSpan = document.createElement("span");
-  dateSpan.textContent = formatDate(issue.created_at);
+  dateSpan.textContent = formatDate(postCreatedAt(post));
   dateSpan.className = "post-card-date";
   meta.appendChild(dateSpan);
   let authorSpan = document.createElement("span");
-  authorSpan.textContent = "by " + issue.user.login;
+  authorSpan.textContent = "by " + postUser(post).login;
   authorSpan.className = "post-card-author";
   meta.appendChild(authorSpan);
   let commentsSpan = document.createElement("span");
-  commentsSpan.textContent = String(issue.comments) + " comments";
+  commentsSpan.textContent = String(postComments(post)) + " comments";
   commentsSpan.className = "post-card-comments";
   meta.appendChild(commentsSpan);
   card.appendChild(meta);
-  if (issue.labels.length !== 0) {
-    let labelsDiv = document.createElement("div");
-    labelsDiv.className = "post-card-labels";
-    issue.labels.forEach((label) => {
+  let badgesDiv = document.createElement("div");
+  badgesDiv.className = "post-card-labels";
+  let hasBadges = {
+    contents: false
+  };
+  let catName = postTypeBadge(post);
+  if (catName !== void 0) {
+    let pill = document.createElement("span");
+    pill.textContent = catName;
+    pill.className = "label-pill small";
+    pill["style.cssText"] = "background-color: #6e40c9; color: #fff";
+    badgesDiv.appendChild(pill);
+    hasBadges.contents = true;
+  }
+  if (post.TAG === "IssuePost") {
+    post._0.labels.forEach((label) => {
       let pill = document.createElement("span");
       pill.textContent = label.name;
       pill.className = "label-pill small";
       pill["style.cssText"] = "background-color: #" + label.color;
-      labelsDiv.appendChild(pill);
+      badgesDiv.appendChild(pill);
+      hasBadges.contents = true;
     });
-    card.appendChild(labelsDiv);
+  }
+  if (hasBadges.contents) {
+    card.appendChild(badgesDiv);
   }
   let excerpt = document.createElement("p");
-  excerpt.textContent = makeExcerpt(issue.body);
+  excerpt.textContent = makeExcerpt(post._0.body);
   excerpt.className = "post-card-excerpt";
   card.appendChild(excerpt);
   return card;
@@ -575,7 +748,7 @@ async function render3(container, page, filterLabel, searchFilter2) {
   loading.className = "loading";
   loading.textContent = "Loading posts...";
   container.appendChild(loading);
-  let issues = await getIssues(page, perPage, filterLabel);
+  let posts = await getPosts(page, perPage, filterLabel);
   container.innerHTML = "";
   let title = document.createElement("h1");
   title.className = "page-title";
@@ -585,18 +758,18 @@ async function render3(container, page, filterLabel, searchFilter2) {
     title.textContent = "Posts";
   }
   container.appendChild(title);
-  let filtered = searchFilter2 === "" ? issues : issues.filter((issue) => issue.title.toLowerCase().includes(searchFilter2.toLowerCase()));
+  let filtered = searchFilter2 === "" ? posts : posts.filter((post) => post._0.title.toLowerCase().includes(searchFilter2.toLowerCase()));
   if (filtered.length === 0) {
     let empty = document.createElement("div");
     empty.className = "empty-state";
     empty.textContent = "No posts found.";
     container.appendChild(empty);
   } else {
-    filtered.forEach((issue) => {
-      container.appendChild(renderIssueCard(issue));
+    filtered.forEach((post) => {
+      container.appendChild(renderPostCard(post));
     });
   }
-  let hasMore = issues.length === perPage;
+  let hasMore = posts.length === perPage;
   render2(container, page, hasMore, (p) => navigate(filterLabel !== void 0 ? {
     TAG: "LabelFilter",
     _0: filterLabel,
@@ -623,17 +796,39 @@ function getLabelTextColor2(_color) {
     return luminance > 0.5 ? "#333" : "#fff";
   })();
 }
-async function render4(container, issueNumber) {
+function renderComment(user, body, createdAt) {
+  let commentDiv = document.createElement("div");
+  commentDiv.className = "comment";
+  let commentHeader = document.createElement("div");
+  commentHeader.className = "comment-header";
+  let commentAvatar = document.createElement("img");
+  commentAvatar.setAttribute("src", user.avatar_url);
+  commentAvatar.setAttribute("alt", user.login);
+  commentAvatar.className = "comment-avatar";
+  commentHeader.appendChild(commentAvatar);
+  let commentAuthor = document.createElement("a");
+  commentAuthor.textContent = user.login;
+  commentAuthor.setAttribute("href", user.html_url);
+  commentAuthor.setAttribute("target", "_blank");
+  commentAuthor.className = "comment-author";
+  commentHeader.appendChild(commentAuthor);
+  let commentDate = document.createElement("span");
+  commentDate.textContent = formatDate2(createdAt);
+  commentDate.className = "comment-date";
+  commentHeader.appendChild(commentDate);
+  commentDiv.appendChild(commentHeader);
+  let commentBody = document.createElement("div");
+  commentBody.className = "comment-body markdown-body";
+  commentBody.innerHTML = Marked.parse(body);
+  commentDiv.appendChild(commentBody);
+  return commentDiv;
+}
+async function render4(container, postType, number) {
   container.innerHTML = "";
   let loading = document.createElement("div");
   loading.className = "loading";
   loading.textContent = "Loading post...";
   container.appendChild(loading);
-  let issuePromise = getIssue(issueNumber);
-  let commentsPromise = getComments(issueNumber);
-  let issueResult = await issuePromise;
-  let commentsResult = await commentsPromise;
-  container.innerHTML = "";
   let backLink = document.createElement("a");
   backLink.textContent = "< Back to posts";
   backLink.setAttribute("href", routeToString({
@@ -641,108 +836,168 @@ async function render4(container, issueNumber) {
     _0: 1
   }));
   backLink.className = "back-link";
-  container.appendChild(backLink);
-  if (issueResult !== void 0) {
-    let article = document.createElement("article");
-    article.className = "post-detail";
-    let header = document.createElement("header");
-    header.className = "post-header";
-    let title = document.createElement("h1");
-    title.textContent = issueResult.title;
-    title.className = "post-title";
-    header.appendChild(title);
-    let meta = document.createElement("div");
-    meta.className = "post-meta";
-    let authorInfo = document.createElement("div");
-    authorInfo.className = "author-info";
-    let avatar = document.createElement("img");
-    avatar.setAttribute("src", issueResult.user.avatar_url);
-    avatar.setAttribute("alt", issueResult.user.login);
-    avatar.className = "avatar";
-    authorInfo.appendChild(avatar);
-    let authorName = document.createElement("a");
-    authorName.textContent = issueResult.user.login;
-    authorName.setAttribute("href", issueResult.user.html_url);
-    authorName.setAttribute("target", "_blank");
-    authorName.className = "author-name";
-    authorInfo.appendChild(authorName);
-    meta.appendChild(authorInfo);
-    let dateInfo = document.createElement("span");
-    dateInfo.textContent = formatDate2(issueResult.created_at);
-    dateInfo.className = "post-date";
-    meta.appendChild(dateInfo);
-    header.appendChild(meta);
-    if (issueResult.labels.length !== 0) {
-      let labelsDiv = document.createElement("div");
-      labelsDiv.className = "post-labels";
-      issueResult.labels.forEach((label) => {
-        let pill = document.createElement("a");
-        pill.textContent = label.name;
-        pill.className = "label-pill";
-        pill.setAttribute("href", routeToString({
-          TAG: "LabelFilter",
-          _0: label.name,
-          _1: 1
-        }));
-        let textLight = getLabelTextColor2(label.color);
-        pill["style.cssText"] = "background-color: #" + label.color + "; color: " + textLight;
-        labelsDiv.appendChild(pill);
+  if (postType === "issue") {
+    let issuePromise = getIssue(number);
+    let commentsPromise = getComments(number);
+    let issueResult = await issuePromise;
+    let commentsResult = await commentsPromise;
+    container.innerHTML = "";
+    container.appendChild(backLink);
+    if (issueResult !== void 0) {
+      let article = document.createElement("article");
+      article.className = "post-detail";
+      let header = document.createElement("header");
+      header.className = "post-header";
+      let title = document.createElement("h1");
+      title.textContent = issueResult.title;
+      title.className = "post-title";
+      header.appendChild(title);
+      let meta = document.createElement("div");
+      meta.className = "post-meta";
+      let authorInfo = document.createElement("div");
+      authorInfo.className = "author-info";
+      let avatar = document.createElement("img");
+      avatar.setAttribute("src", issueResult.user.avatar_url);
+      avatar.setAttribute("alt", issueResult.user.login);
+      avatar.className = "avatar";
+      authorInfo.appendChild(avatar);
+      let authorName = document.createElement("a");
+      authorName.textContent = issueResult.user.login;
+      authorName.setAttribute("href", issueResult.user.html_url);
+      authorName.setAttribute("target", "_blank");
+      authorName.className = "author-name";
+      authorInfo.appendChild(authorName);
+      meta.appendChild(authorInfo);
+      let dateInfo = document.createElement("span");
+      dateInfo.textContent = formatDate2(issueResult.created_at);
+      dateInfo.className = "post-date";
+      meta.appendChild(dateInfo);
+      header.appendChild(meta);
+      if (issueResult.labels.length !== 0) {
+        let labelsDiv = document.createElement("div");
+        labelsDiv.className = "post-labels";
+        issueResult.labels.forEach((label) => {
+          let pill = document.createElement("a");
+          pill.textContent = label.name;
+          pill.className = "label-pill";
+          pill.setAttribute("href", routeToString({
+            TAG: "LabelFilter",
+            _0: label.name,
+            _1: 1
+          }));
+          let textLight = getLabelTextColor2(label.color);
+          pill["style.cssText"] = "background-color: #" + label.color + "; color: " + textLight;
+          labelsDiv.appendChild(pill);
+        });
+        header.appendChild(labelsDiv);
+      }
+      article.appendChild(header);
+      let bodyDiv = document.createElement("div");
+      bodyDiv.className = "post-body markdown-body";
+      let text = issueResult.body;
+      let bodyHtml = text !== void 0 ? Marked.parse(text) : "<p><em>No content</em></p>";
+      bodyDiv.innerHTML = bodyHtml;
+      article.appendChild(bodyDiv);
+      let commentsSection = document.createElement("section");
+      commentsSection.className = "comments-section";
+      let commentsTitle = document.createElement("h2");
+      commentsTitle.textContent = String(commentsResult.length) + " Comments";
+      commentsTitle.className = "comments-title";
+      commentsSection.appendChild(commentsTitle);
+      commentsResult.forEach((comment) => {
+        commentsSection.appendChild(renderComment(comment.user, comment.body, comment.created_at));
       });
-      header.appendChild(labelsDiv);
+      article.appendChild(commentsSection);
+      let githubLink = document.createElement("a");
+      githubLink.textContent = "View on GitHub";
+      githubLink.setAttribute("href", issueResult.html_url);
+      githubLink.setAttribute("target", "_blank");
+      githubLink.className = "github-link";
+      article.appendChild(githubLink);
+      container.appendChild(article);
+    } else {
+      let error = document.createElement("div");
+      error.className = "error-state";
+      error.textContent = "Post not found.";
+      container.appendChild(error);
     }
-    article.appendChild(header);
-    let bodyDiv = document.createElement("div");
-    bodyDiv.className = "post-body markdown-body";
-    let text = issueResult.body;
-    let bodyHtml = text !== void 0 ? Marked.parse(text) : "<p><em>No content</em></p>";
-    bodyDiv.innerHTML = bodyHtml;
-    article.appendChild(bodyDiv);
-    let commentsSection = document.createElement("section");
-    commentsSection.className = "comments-section";
-    let commentsTitle = document.createElement("h2");
-    commentsTitle.textContent = String(commentsResult.length) + " Comments";
-    commentsTitle.className = "comments-title";
-    commentsSection.appendChild(commentsTitle);
-    commentsResult.forEach((comment) => {
-      let commentDiv = document.createElement("div");
-      commentDiv.className = "comment";
-      let commentHeader = document.createElement("div");
-      commentHeader.className = "comment-header";
-      let commentAvatar = document.createElement("img");
-      commentAvatar.setAttribute("src", comment.user.avatar_url);
-      commentAvatar.setAttribute("alt", comment.user.login);
-      commentAvatar.className = "comment-avatar";
-      commentHeader.appendChild(commentAvatar);
-      let commentAuthor = document.createElement("a");
-      commentAuthor.textContent = comment.user.login;
-      commentAuthor.setAttribute("href", comment.user.html_url);
-      commentAuthor.setAttribute("target", "_blank");
-      commentAuthor.className = "comment-author";
-      commentHeader.appendChild(commentAuthor);
-      let commentDate = document.createElement("span");
-      commentDate.textContent = formatDate2(comment.created_at);
-      commentDate.className = "comment-date";
-      commentHeader.appendChild(commentDate);
-      commentDiv.appendChild(commentHeader);
-      let commentBody = document.createElement("div");
-      commentBody.className = "comment-body markdown-body";
-      commentBody.innerHTML = Marked.parse(comment.body);
-      commentDiv.appendChild(commentBody);
-      commentsSection.appendChild(commentDiv);
-    });
-    article.appendChild(commentsSection);
-    let githubLink = document.createElement("a");
-    githubLink.textContent = "View on GitHub";
-    githubLink.setAttribute("href", issueResult.html_url);
-    githubLink.setAttribute("target", "_blank");
-    githubLink.className = "github-link";
-    article.appendChild(githubLink);
-    container.appendChild(article);
   } else {
-    let error = document.createElement("div");
-    error.className = "error-state";
-    error.textContent = "Post not found.";
-    container.appendChild(error);
+    let discussionPromise = getDiscussion(number);
+    let commentsPromise$1 = getDiscussionComments(number);
+    let discussionResult = await discussionPromise;
+    let commentsResult$1 = await commentsPromise$1;
+    container.innerHTML = "";
+    container.appendChild(backLink);
+    if (discussionResult !== void 0) {
+      let article$1 = document.createElement("article");
+      article$1.className = "post-detail";
+      let header$1 = document.createElement("header");
+      header$1.className = "post-header";
+      let title$1 = document.createElement("h1");
+      title$1.textContent = discussionResult.title;
+      title$1.className = "post-title";
+      header$1.appendChild(title$1);
+      let meta$1 = document.createElement("div");
+      meta$1.className = "post-meta";
+      let authorInfo$1 = document.createElement("div");
+      authorInfo$1.className = "author-info";
+      let avatar$1 = document.createElement("img");
+      avatar$1.setAttribute("src", discussionResult.user.avatar_url);
+      avatar$1.setAttribute("alt", discussionResult.user.login);
+      avatar$1.className = "avatar";
+      authorInfo$1.appendChild(avatar$1);
+      let authorName$1 = document.createElement("a");
+      authorName$1.textContent = discussionResult.user.login;
+      authorName$1.setAttribute("href", discussionResult.user.html_url);
+      authorName$1.setAttribute("target", "_blank");
+      authorName$1.className = "author-name";
+      authorInfo$1.appendChild(authorName$1);
+      meta$1.appendChild(authorInfo$1);
+      let dateInfo$1 = document.createElement("span");
+      dateInfo$1.textContent = formatDate2(discussionResult.created_at);
+      dateInfo$1.className = "post-date";
+      meta$1.appendChild(dateInfo$1);
+      header$1.appendChild(meta$1);
+      let catDiv = document.createElement("div");
+      catDiv.className = "post-labels";
+      let catPill = document.createElement("span");
+      let e = discussionResult.category.emoji;
+      let emoji = e !== void 0 ? e + " " : "";
+      catPill.textContent = emoji + discussionResult.category.name;
+      catPill.className = "label-pill";
+      catPill["style.cssText"] = "background-color: #6e40c9; color: #fff";
+      catDiv.appendChild(catPill);
+      header$1.appendChild(catDiv);
+      article$1.appendChild(header$1);
+      let bodyDiv$1 = document.createElement("div");
+      bodyDiv$1.className = "post-body markdown-body";
+      let text$1 = discussionResult.body;
+      let bodyHtml$1 = text$1 !== void 0 ? Marked.parse(text$1) : "<p><em>No content</em></p>";
+      bodyDiv$1.innerHTML = bodyHtml$1;
+      article$1.appendChild(bodyDiv$1);
+      let commentsSection$1 = document.createElement("section");
+      commentsSection$1.className = "comments-section";
+      let commentsTitle$1 = document.createElement("h2");
+      commentsTitle$1.textContent = String(commentsResult$1.length) + " Comments";
+      commentsTitle$1.className = "comments-title";
+      commentsSection$1.appendChild(commentsTitle$1);
+      commentsResult$1.forEach((comment) => {
+        commentsSection$1.appendChild(renderComment(comment.user, comment.body, comment.created_at));
+      });
+      article$1.appendChild(commentsSection$1);
+      let githubLink$1 = document.createElement("a");
+      githubLink$1.textContent = "View on GitHub";
+      githubLink$1.setAttribute("href", discussionResult.html_url);
+      githubLink$1.setAttribute("target", "_blank");
+      githubLink$1.className = "github-link";
+      article$1.appendChild(githubLink$1);
+      container.appendChild(article$1);
+    } else {
+      let error$1 = document.createElement("div");
+      error$1.className = "error-state";
+      error$1.textContent = "Discussion not found.";
+      container.appendChild(error$1);
+    }
   }
   window.scrollTo(0, 0);
 }
@@ -811,7 +1066,7 @@ async function handleRoute(route) {
         render3(main, route._0, void 0, searchFilter.contents);
         return;
       case "PostDetail":
-        render4(main, route._0);
+        render4(main, route._0, route._1);
         return;
       case "LabelFilter":
         render3(main, route._1, route._0, searchFilter.contents);

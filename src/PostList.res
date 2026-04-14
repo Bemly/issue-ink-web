@@ -16,17 +16,63 @@ let makeExcerpt = (body: option<string>): string => {
   }
 }
 
-let renderIssueCard = (issue: GithubApi.issue): DomHelpers.element => {
+let postTitle = (post: GithubApi.post): string => {
+  switch post {
+  | IssuePost(issue) => issue.title
+  | DiscussionPost(discussion) => discussion.title
+  }
+}
+
+let postBody = (post: GithubApi.post): option<string> => {
+  switch post {
+  | IssuePost(issue) => issue.body
+  | DiscussionPost(discussion) => discussion.body
+  }
+}
+
+let postCreatedAt = (post: GithubApi.post): string => {
+  switch post {
+  | IssuePost(issue) => issue.created_at
+  | DiscussionPost(discussion) => discussion.created_at
+  }
+}
+
+let postUser = (post: GithubApi.post): GithubApi.user => {
+  switch post {
+  | IssuePost(issue) => issue.user
+  | DiscussionPost(discussion) => discussion.user
+  }
+}
+
+let postComments = (post: GithubApi.post): int => {
+  switch post {
+  | IssuePost(issue) => issue.comments
+  | DiscussionPost(discussion) => discussion.comments
+  }
+}
+
+let postRoute = (post: GithubApi.post): Router.route => {
+  switch post {
+  | IssuePost(issue) => PostDetail("issue", issue.number)
+  | DiscussionPost(discussion) => PostDetail("discussion", discussion.number)
+  }
+}
+
+let postTypeBadge = (post: GithubApi.post): option<string> => {
+  switch post {
+  | IssuePost(_) => None
+  | DiscussionPost(d) => Some(d.category.name)
+  }
+}
+
+let renderPostCard = (post: GithubApi.post): DomHelpers.element => {
   let card = DomHelpers.createElement("article")
   card->DomHelpers.setClassName("post-card")
 
   // Title
   let titleLink = DomHelpers.createElement("a")
-  titleLink->DomHelpers.setTextContent(issue.title)
-  titleLink->DomHelpers.setAttribute(
-    "href",
-    Router.routeToString(PostDetail(issue.number)),
-  )
+  titleLink->DomHelpers.setTextContent(postTitle(post))
+  titleLink->DomHelpers.setAttribute("href", Router.routeToString(postRoute(post)))
   titleLink->DomHelpers.setClassName("post-card-title")
   card->DomHelpers.appendChild(titleLink)
 
@@ -35,41 +81,63 @@ let renderIssueCard = (issue: GithubApi.issue): DomHelpers.element => {
   meta->DomHelpers.setClassName("post-card-meta")
 
   let dateSpan = DomHelpers.createElement("span")
-  dateSpan->DomHelpers.setTextContent(formatDate(issue.created_at))
+  dateSpan->DomHelpers.setTextContent(formatDate(postCreatedAt(post)))
   dateSpan->DomHelpers.setClassName("post-card-date")
   meta->DomHelpers.appendChild(dateSpan)
 
   let authorSpan = DomHelpers.createElement("span")
-  authorSpan->DomHelpers.setTextContent("by " ++ issue.user.login)
+  authorSpan->DomHelpers.setTextContent("by " ++ postUser(post).login)
   authorSpan->DomHelpers.setClassName("post-card-author")
   meta->DomHelpers.appendChild(authorSpan)
 
   let commentsSpan = DomHelpers.createElement("span")
   commentsSpan->DomHelpers.setTextContent(
-    Belt.Int.toString(issue.comments) ++ " comments",
+    Belt.Int.toString(postComments(post)) ++ " comments",
   )
   commentsSpan->DomHelpers.setClassName("post-card-comments")
   meta->DomHelpers.appendChild(commentsSpan)
 
   card->DomHelpers.appendChild(meta)
 
-  // Labels
-  if Array.length(issue.labels) > 0 {
-    let labelsDiv = DomHelpers.createElement("div")
-    labelsDiv->DomHelpers.setClassName("post-card-labels")
+  // Badges: labels for issues, category for discussions
+  let badgesDiv = DomHelpers.createElement("div")
+  badgesDiv->DomHelpers.setClassName("post-card-labels")
+  let hasBadges = ref(false)
+
+  // Type badge
+  switch postTypeBadge(post) {
+  | Some(catName) => {
+      let pill = DomHelpers.createElement("span")
+      pill->DomHelpers.setTextContent(catName)
+      pill->DomHelpers.setClassName("label-pill small")
+      pill->DomHelpers.setStyle("background-color: #6e40c9; color: #fff")
+      badgesDiv->DomHelpers.appendChild(pill)
+      hasBadges := true
+    }
+  | None => ()
+  }
+
+  // Labels (issues only)
+  switch post {
+  | IssuePost(issue) =>
     issue.labels->Array.forEach(label => {
       let pill = DomHelpers.createElement("span")
       pill->DomHelpers.setTextContent(label.name)
       pill->DomHelpers.setClassName("label-pill small")
       pill->DomHelpers.setStyle("background-color: #" ++ label.color)
-      labelsDiv->DomHelpers.appendChild(pill)
+      badgesDiv->DomHelpers.appendChild(pill)
+      hasBadges := true
     })
-    card->DomHelpers.appendChild(labelsDiv)
+  | DiscussionPost(_) => ()
+  }
+
+  if hasBadges.contents {
+    card->DomHelpers.appendChild(badgesDiv)
   }
 
   // Excerpt
   let excerpt = DomHelpers.createElement("p")
-  excerpt->DomHelpers.setTextContent(makeExcerpt(issue.body))
+  excerpt->DomHelpers.setTextContent(makeExcerpt(postBody(post)))
   excerpt->DomHelpers.setClassName("post-card-excerpt")
   card->DomHelpers.appendChild(excerpt)
 
@@ -89,7 +157,7 @@ let render = async (
   loading->DomHelpers.setTextContent("Loading posts...")
   container->DomHelpers.appendChild(loading)
 
-  let issues = await GithubApi.getIssues(~page, ~perPage=Config.perPage, ~labels=?filterLabel)
+  let posts = await GithubApi.getPosts(~page, ~perPage=Config.perPage, ~labels=?filterLabel)
 
   container->DomHelpers.setInnerHTML("")
 
@@ -103,10 +171,10 @@ let render = async (
 
   let filtered =
     if searchFilter == "" {
-      issues
+      posts
     } else {
-      issues->Array.filter(issue => {
-        String.toLowerCase(issue.title)->String.includes(searchFilter->String.toLowerCase)
+      posts->Array.filter(post => {
+        String.toLowerCase(postTitle(post))->String.includes(searchFilter->String.toLowerCase)
       })
     }
 
@@ -116,12 +184,12 @@ let render = async (
     empty->DomHelpers.setTextContent("No posts found.")
     container->DomHelpers.appendChild(empty)
   } else {
-    filtered->Array.forEach(issue => {
-      container->DomHelpers.appendChild(renderIssueCard(issue))
+    filtered->Array.forEach(post => {
+      container->DomHelpers.appendChild(renderPostCard(post))
     })
   }
 
-  let hasMore = Array.length(issues) == Config.perPage
+  let hasMore = Array.length(posts) == Config.perPage
   Pagination.render(
     container,
     ~currentPage=page,

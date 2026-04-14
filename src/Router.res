@@ -1,6 +1,6 @@
 type route =
   | PostList(int) // page number
-  | PostDetail(int) // issue number
+  | PostDetail(string, int) // ("issue", 123) or ("discussion", 456)
   | Labels
   | LabelFilter(string, int) // label name + page
   | NotFound
@@ -14,9 +14,9 @@ let parseHash = (hash: string): route => {
 
   switch parts {
   | [] => PostList(1)
-  | ["post", numberStr] =>
+  | ["post", postType, numberStr] =>
     switch Int.fromString(numberStr) {
-    | Some(n) => PostDetail(n)
+    | Some(n) => PostDetail(postType, n)
     | None => NotFound
     }
   | ["labels"] => Labels
@@ -35,11 +35,11 @@ let currentRoute = ref(PostList(1))
 let routeToString = (route: route): string => {
   switch route {
   | PostList(1) => "#/"
-  | PostList(p) => `#/page/${Belt.Int.toString(p)}`
-  | PostDetail(n) => `#/post/${Belt.Int.toString(n)}`
+  | PostList(p) => "#/page/" ++ Belt.Int.toString(p)
+  | PostDetail(postType, n) => "#/post/" ++ postType ++ "/" ++ Belt.Int.toString(n)
   | Labels => "#/labels"
-  | LabelFilter(name, 1) => `#/labels/${name}`
-  | LabelFilter(name, p) => `#/labels/${name}/page/${Belt.Int.toString(p)}`
+  | LabelFilter(name, 1) => "#/labels/" ++ name
+  | LabelFilter(name, p) => "#/labels/" ++ name ++ "/page/" ++ Belt.Int.toString(p)
   | NotFound => "#/"
   }
 }
@@ -57,6 +57,5 @@ let init = (handler: route => unit) => {
   }
 
   DomHelpers.addWindowEventListener("hashchange", handleHashChange)
-  // Handle initial load
   handleHashChange()
 }

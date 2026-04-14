@@ -58,8 +58,8 @@ let handleRoute = async (route: Router.route) => {
   switch route {
   | PostList(page) =>
     let _ = PostList.render(main, ~page, ~searchFilter=searchFilter.contents)
-  | PostDetail(number) =>
-    let _ = PostDetail.render(main, ~issueNumber=number)
+  | PostDetail(postType, number) =>
+    let _ = PostDetail.render(main, ~postType, ~number)
   | Labels =>
     let _ = PostList.render(main, ~page=1, ~searchFilter="")
   | LabelFilter(name, page) =>
