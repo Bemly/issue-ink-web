@@ -12,8 +12,9 @@ external querySelector: string => option<element> = "querySelector"
 @val @scope("document")
 external body: element = "body"
 
-@val @scope("document")
-external setTitle: string => unit = "title"
+let setTitle = (_title: string) => {
+  %raw(`document.title = _title`)
+}
 
 @send external appendChild: (element, element) => unit = "appendChild"
 
@@ -56,14 +57,17 @@ external querySelectorAll: string => array<element> = "querySelectorAll"
 @val @scope("window")
 external addWindowEventListener: (string, unit => unit) => unit = "addEventListener"
 
-@val @scope("window")
-external getLocationHash: unit => string = "location.hash"
+let getLocationHash = (): string => {
+  %raw(`window.location.hash`)
+}
 
-@val @scope("window")
-external setLocationHash: string => unit = "location.hash"
+let setLocationHash = (_hash: string) => {
+  %raw(`window.location.hash = _hash`)
+}
 
-@val @scope("window")
-external getLocationPathname: unit => string = "location.pathname"
+let getLocationPathname = (): string => {
+  %raw(`window.location.pathname`)
+}
 
 @val @scope("window")
 external scrollTo: (int, int) => unit = "scrollTo"

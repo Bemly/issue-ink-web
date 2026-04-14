@@ -6,6 +6,17 @@ var apiVersion = "2022-11-28";
 var perPage = 10;
 var siteTitle = "IssueInk";
 
+// src/DomHelpers.mjs
+function setTitle(_title) {
+  return document.title = _title;
+}
+function getLocationHash() {
+  return window.location.hash;
+}
+function setLocationHash(_hash) {
+  return window.location.hash = _hash;
+}
+
 // node_modules/@rescript/runtime/lib/es6/Primitive_option.js
 function some(x) {
   if (x === void 0) {
@@ -157,11 +168,11 @@ function routeToString(route) {
   }
 }
 function navigate(route) {
-  window["location.hash"](routeToString(route));
+  return setLocationHash(routeToString(route));
 }
 function init(handler) {
   let handleHashChange = () => {
-    let hash = window["location.hash"]();
+    let hash = getLocationHash();
     let route = parseHash(hash);
     currentRoute.contents = route;
     handler(route);
@@ -808,7 +819,7 @@ async function handleRoute(route) {
     }
   }
 }
-document.title(siteTitle);
+setTitle(siteTitle);
 init((route) => {
   handleRoute(route);
 });
